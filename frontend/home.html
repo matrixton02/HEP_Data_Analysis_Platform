@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My Datasets - Particle Physics Platform</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <!-- Navigation -->
+    <nav class="navbar">
+        <a href="/home" class="navbar-brand"> Particle Physics</a>
+        <ul class="navbar-nav">
+            <li><a href="/home" class="nav-link active">My Datasets</a></li>
+            <li><a href="/datasets" class="nav-link">Browse Datasets</a></li>
+            <li><a href="/run" class="nav-link">Run Analysis</a></li>
+        </ul>
+        <div class="user-info">
+            <span id="usernameDisplay"></span>
+            <button class="btn btn-secondary" onclick="logout()">Logout</button>
+        </div>
+    </nav>
+
+    <div class="container">
+        <h1 style="margin-bottom: 2rem;">My Filtered Datasets</h1>
+
+        <!-- Stats Overview -->
+        <div class="grid grid-3 mb-3">
+            <div class="stat-card">
+                <div class="stat-value" id="totalJobs">0</div>
+                <div class="stat-label">Total Filter Jobs</div>
+            </div>
+            <div class="stat-card" style="background: linear-gradient(135deg, #10b981, #059669);">
+                <div class="stat-value" id="completedJobs">0</div>
+                <div class="stat-label">Completed</div>
+            </div>
+            <div class="stat-card" style="background: linear-gradient(135deg, #f59e0b, #d97706);">
+                <div class="stat-value" id="pendingJobs">0</div>
+                <div class="stat-label">In Progress</div>
+            </div>
+        </div>
+
+        <!-- Filter Jobs Table -->
+        <div class="card">
+            <div class="card-header flex justify-between items-center">
+                <span>Your Filter Jobs</span>
+                <a href="/datasets" class="btn btn-primary">+ Create New</a>
+            </div>
+
+            <div id="loadingSpinner" class="spinner"></div>
+            
+            <div id="jobsTableContainer" style="display: none;">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Dataset Name</th>
+                            <th>Source</th>
+                            <th>Status</th>
+                            <th>Progress</th>
+                            <th>Events</th>
+                            <th>Size (MB)</th>
+                            <th>Created</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="jobsTableBody"></tbody>
+                </table>
+            </div>
+
+            <div id="noJobsMessage" style="display: none; padding: 3rem; text-align: center; color: var(--text-secondary);">
+                <p style="font-size: 1.25rem; margin-bottom: 1rem;">No filter jobs yet</p>
+                <p>Create your first filtered dataset by browsing available datasets.</p>
+                <a href="/datasets" class="btn btn-primary mt-2">Browse Datasets</a>
+            </div>
+        </div>
+    </div>
+
+    <script>
+    const API_URL = 'http://localhost:8000/api';
+    
+    // Check authentication
+    const token = localStorage.getItem('token');
+    const username = localStorage.getItem('username');
+    
+    if (!token) {
+        window.location.href = '/';
+    }
+    
+    document.getElementById('usernameDisplay').textContent = username;
+    
+    // Logout function
+    function logout() {
+        localStorage.clear();
+        window.location.href = '/';
+    }
+    
+    // Fetch filter jobs
+    async function loadFilterJobs() {
+        try {
+            const response = await fetch(`${API_URL}/filter-jobs`, {
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                }
+            });
+            
+            if (response.ok) {
+                const jobs = await response.json();
+                displayJobs(jobs);
+                updateStats(jobs);
+            } else if (response.status === 401) {
+                logout();
+            }
+        } catch (error) {
+            console.error('Error loading jobs:', error);
+        }
+    }
+    
+    // Display jobs in table
+    function displayJobs(jobs) {
+        document.getElementById('loadingSpinner').style.display = 'none';
+        
+        if (jobs.length === 0) {
+            document.getElementById('noJobsMessage').style.display = 'block';
+            return;
+        }
+        
+        document.getElementById('jobsTableContainer').style.display = 'block';
+        
+        const tbody = document.getElementById('jobsTableBody');
+        tbody.innerHTML = jobs.map(job => `
+            <tr>
+                <td><strong>${job.custom_name}</strong></td>
+                <td>${job.source_dataset_name}</td>
+                <td><span class="badge badge-${job.status}">${job.status.toUpperCase()}</span></td>
+                <td>
+                    <div class="progress">
+                        <div class="progress-bar" style="width: ${job.progress}%"></div>
+                    </div>
+                    <small>${job.progress}%</small>
+                </td>
+                <td>${job.filtered_events !== null ? job.filtered_events.toLocaleString() : '-'}</td>
+                <td>${job.output_size_mb !== null ? job.output_size_mb.toFixed(2) : '-'}</td>
+                <td>${new Date(job.created_at).toLocaleDateString()}</td>
+                <td>
+                    ${job.status === 'completed' ? `
+                        <button class="btn btn-primary" onclick="downloadDataset(${job.id})">
+                            Download
+                        </button>
+                        <a href="/run?job_id=${job.id}" class="btn btn-success">
+                            Analyze
+                        </a>
+                    ` : `
+                        <button class="btn btn-secondary" onclick="refreshJob(${job.id})">
+                            Refresh
+                        </button>
+                    `}
+                </td>
+            </tr>
+        `).join('');
+    }
+    
+    // Update statistics
+    function updateStats(jobs) {
+        document.getElementById('totalJobs').textContent = jobs.length;
+        document.getElementById('completedJobs').textContent = 
+            jobs.filter(j => j.status === 'completed').length;
+        document.getElementById('pendingJobs').textContent = 
+            jobs.filter(j => j.status === 'pending' || j.status === 'processing').length;
+    }
+    
+    // Download dataset - FIXED VERSION
+    async function downloadDataset(jobId) {
+        const token = localStorage.getItem('token');
+        
+        try {
+            console.log('Downloading job:', jobId);
+            
+            const response = await fetch(`${API_URL}/filter-jobs/${jobId}/download`, {
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                }
+            });
+            
+            if (!response.ok) {
+                const error = await response.json();
+                alert('Download failed: ' + (error.detail || response.statusText));
+                return;
+            }
+            
+            // Get the blob
+            const blob = await response.blob();
+            console.log('Downloaded blob:', blob.size, 'bytes');
+            
+            // Create download link
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `filtered_${jobId}.csv`;
+            document.body.appendChild(a);
+            a.click();
+            
+            // Cleanup
+            setTimeout(() => {
+                window.URL.revokeObjectURL(url);
+                document.body.removeChild(a);
+            }, 100);
+            
+            console.log('Download triggered!');
+            
+        } catch (error) {
+            console.error('Download error:', error);
+            alert('Download failed: ' + error.message);
+        }
+    }
+    
+    // Refresh job status
+    async function refreshJob(jobId) {
+        await loadFilterJobs();
+    }
+    
+    // Auto-refresh for pending jobs
+    setInterval(() => {
+        const pendingCount = parseInt(document.getElementById('pendingJobs').textContent);
+        if (pendingCount > 0) {
+            loadFilterJobs();
+        }
+    }, 5000); // Refresh every 5 seconds
+    
+    // Initial load
+    loadFilterJobs();
+</script>
+</body>
+</html>

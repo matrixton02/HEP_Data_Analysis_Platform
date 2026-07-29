@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login - Particle Physics Platform</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <div class="login-container">
+        <div class="login-card">
+            <h1 class="login-title"> Particle Physics</h1>
+            <p class="text-center" style="color: var(--text-secondary); margin-bottom: 2rem;">
+                HEP Data Analysis Platform
+            </p>
+
+            <div id="alertContainer"></div>
+
+            <form id="loginForm">
+                <div class="form-group">
+                    <label class="form-label" for="username">Username</label>
+                    <input 
+                        type="text" 
+                        id="username" 
+                        class="form-input" 
+                        required
+                        placeholder="Enter your username"
+                    >
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label" for="password">Password</label>
+                    <input 
+                        type="password" 
+                        id="password" 
+                        class="form-input" 
+                        required
+                        placeholder="Enter your password"
+                    >
+                </div>
+
+                <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 1rem;">
+                    Login
+                </button>
+            </form>
+
+            <div style="text-align: center; margin-top: 2rem;">
+                <p style="color: var(--text-secondary); margin-bottom: 1rem;">
+                    Don't have an account?
+                </p>
+                <button id="showRegister" class="btn btn-outline">
+                    Register
+                </button>
+            </div>
+        </div>
+
+        <!-- Registration Modal (hidden by default) -->
+        <div id="registerModal" style="display: none;">
+            <div class="login-card">
+                <h2 class="login-title">Create Account</h2>
+
+                <div id="registerAlertContainer"></div>
+
+                <form id="registerForm">
+                    <div class="form-group">
+                        <label class="form-label" for="regUsername">Username</label>
+                        <input 
+                            type="text" 
+                            id="regUsername" 
+                            class="form-input" 
+                            required
+                            placeholder="Choose a username"
+                        >
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label" for="regEmail">Email</label>
+                        <input 
+                            type="email" 
+                            id="regEmail" 
+                            class="form-input" 
+                            required
+                            placeholder="your.email@example.com"
+                        >
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label" for="regPassword">Password</label>
+                        <input 
+                            type="password" 
+                            id="regPassword" 
+                            class="form-input" 
+                            required
+                            placeholder="Create a password"
+                            minlength="6"
+                        >
+                    </div>
+
+                    <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 1rem;">
+                        Create Account
+                    </button>
+                </form>
+
+                <div style="text-align: center; margin-top: 2rem;">
+                    <button id="showLogin" class="btn btn-outline">
+                        Back to Login
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/js/auth.js"></script>
+</body>
+</html>

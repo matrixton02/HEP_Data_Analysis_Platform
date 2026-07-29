@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Browse Datasets - Particle Physics Platform</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <!-- Navigation -->
+    <nav class="navbar">
+        <a href="/home" class="navbar-brand"> Particle Physics</a>
+        <ul class="navbar-nav">
+            <li><a href="/home" class="nav-link">My Datasets</a></li>
+            <li><a href="/datasets" class="nav-link active">Browse Datasets</a></li>
+            <li><a href="/run" class="nav-link">Run Analysis</a></li>
+        </ul>
+        <div class="user-info">
+            <span id="usernameDisplay"></span>
+            <button class="btn btn-secondary" onclick="logout()">Logout</button>
+        </div>
+    </nav>
+
+    <div class="container">
+        <h1 style="margin-bottom: 2rem;">Available Datasets</h1>
+
+        <div id="loadingSpinner" class="spinner"></div>
+
+        <div id="datasetsContainer" class="grid grid-2" style="display: none;"></div>
+
+        <div id="noDatasetsMessage" style="display: none; text-align: center; padding: 3rem;">
+            <p style="font-size: 1.25rem; color: var(--text-secondary);">
+                No datasets available. Please contact your administrator to add datasets.
+            </p>
+        </div>
+    </div>
+
+    <script>
+        const API_URL = 'http://localhost:8000/api';
+        const token = localStorage.getItem('token');
+        const username = localStorage.getItem('username');
+        
+        if (!token) {
+            window.location.href = '/';
+        }
+        
+        document.getElementById('usernameDisplay').textContent = username;
+        
+        function logout() {
+            localStorage.clear();
+            window.location.href = '/';
+        }
+        
+        // Load available datasets
+        async function loadDatasets() {
+            try {
+                const response = await fetch(`${API_URL}/datasets`, {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+                
+                if (response.ok) {
+                    const datasets = await response.json();
+                    displayDatasets(datasets);
+                } else if (response.status === 401) {
+                    logout();
+                }
+            } catch (error) {
+                console.error('Error loading datasets:', error);
+            }
+        }
+        
+        // Display datasets
+        function displayDatasets(datasets) {
+            document.getElementById('loadingSpinner').style.display = 'none';
+            
+            if (datasets.length === 0) {
+                document.getElementById('noDatasetsMessage').style.display = 'block';
+                return;
+            }
+            
+            const container = document.getElementById('datasetsContainer');
+            container.style.display = 'grid';
+            
+            container.innerHTML = datasets.map(dataset => `
+                <div class="card">
+                    <div class="card-header">${dataset.name}</div>
+                    <p style="color: var(--text-secondary); margin-bottom: 1rem;">
+                        ${dataset.description || 'No description available'}
+                    </p>
+                    
+                    <div class="stats-grid" style="grid-template-columns: 1fr 1fr; margin-bottom: 1rem;">
+                        <div class="stat-item">
+                            <div class="stat-item-label">Total Events</div>
+                            <div class="stat-item-value">${dataset.total_events.toLocaleString()}</div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-item-label">File Size</div>
+                            <div class="stat-item-value">${dataset.file_size_mb.toFixed(2)} MB</div>
+                        </div>
+                    </div>
+                    
+                    <div style="margin-bottom: 1rem;">
+                        <strong>Columns:</strong>
+                        <div style="margin-top: 0.5rem;">
+                            ${dataset.columns.slice(0, 5).map(col => 
+                                `<span class="badge badge-processing">${col}</span>`
+                            ).join(' ')}
+                            ${dataset.columns.length > 5 ? `<span class="badge">+${dataset.columns.length - 5} more</span>` : ''}
+                        </div>
+                    </div>
+                    
+                    <button 
+                        class="btn btn-primary" 
+                        style="width: 100%;"
+                        onclick="selectDataset(${dataset.id}, '${dataset.name}')"
+                    >
+                        Select & Filter
+                    </button>
+                </div>
+            `).join('');
+        }
+        
+        // Select dataset for filtering
+        function selectDataset(datasetId, datasetName) {
+            // Store selected dataset and redirect to filter page
+            localStorage.setItem('selectedDatasetId', datasetId);
+            localStorage.setItem('selectedDatasetName', datasetName);
+            window.location.href = '/filter';
+        }
+        
+        // Initial load
+        loadDatasets();
+    </script>
+</body>
+</html>

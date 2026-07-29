@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Filter Dataset - Particle Physics Platform</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <!-- Navigation -->
+    <nav class="navbar">
+        <a href="/home" class="navbar-brand"> Particle Physics</a>
+        <ul class="navbar-nav">
+            <li><a href="/home" class="nav-link">My Datasets</a></li>
+            <li><a href="/datasets" class="nav-link">Browse Datasets</a></li>
+            <li><a href="/run" class="nav-link">Run Analysis</a></li>
+        </ul>
+        <div class="user-info">
+            <span id="usernameDisplay"></span>
+            <button class="btn btn-secondary" onclick="logout()">Logout</button>
+        </div>
+    </nav>
+
+    <div class="container">
+        <div class="flex justify-between items-center mb-3">
+            <h1>Filter Dataset: <span id="datasetName"></span></h1>
+            <a href="/datasets" class="btn btn-outline">← Back to Datasets</a>
+        </div>
+
+        <!-- Correlation Matrix -->
+        <div class="card">
+            <div class="card-header">Correlation Matrix</div>
+            <div id="correlationContainer" class="correlation-matrix">
+                <div class="spinner"></div>
+            </div>
+        </div>
+
+        <!-- Parameter Statistics & Selection -->
+        <div class="card">
+            <div class="card-header">Parameter Selection & Thresholds</div>
+            <div id="parametersContainer">
+                <div class="spinner"></div>
+            </div>
+        </div>
+
+        <!-- Submit Form -->
+        <div class="card">
+            <div class="card-header">Create Filtered Dataset</div>
+            <form id="filterForm">
+                <div class="form-group">
+                    <label class="form-label" for="customName">Dataset Name</label>
+                    <input 
+                        type="text" 
+                        id="customName" 
+                        class="form-input" 
+                        required
+                        placeholder="e.g., Higgs_ZZ_filtered"
+                    >
+                </div>
+
+                <div id="selectedColumnsInfo" class="alert alert-info mb-2">
+                    <strong>Selected Columns:</strong> <span id="selectedColumnsList">None</span>
+                </div>
+
+                <button type="submit" class="btn btn-primary" style="width: 100%;">
+                    Start Filtration Process
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        const API_URL = 'http://localhost:8000/api';
+        const token = localStorage.getItem('token');
+        const username = localStorage.getItem('username');
+        const datasetId = localStorage.getItem('selectedDatasetId');
+        const datasetName = localStorage.getItem('selectedDatasetName');
+        
+        if (!token || !datasetId) {
+            window.location.href = '/datasets';
+        }
+        
+        document.getElementById('usernameDisplay').textContent = username;
+        document.getElementById('datasetName').textContent = datasetName;
+        
+        function logout() {
+            localStorage.clear();
+            window.location.href = '/';
+        }
+        
+        let datasetStats = null;
+        let selectedColumns = new Set();
+        let filterConfig = {};
+        
+        // Load dataset statistics
+        async function loadDatasetStats() {
+            try {
+                const response = await fetch(`${API_URL}/datasets/${datasetId}/stats`, {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+                
+                if (response.ok) {
+                    const stats = await response.json();
+                    datasetStats = stats;
+                    displayCorrelationMatrix(stats.correlation_matrix);
+                    displayParameters(stats.statistics);
+                } else if (response.status === 401) {
+                    logout();
+                }
+            } catch (error) {
+                console.error('Error loading dataset stats:', error);
+            }
+        }
+        
+        // Display correlation matrix
+        function displayCorrelationMatrix(corrMatrix) {
+            const container = document.getElementById('correlationContainer');
+            const columns = Object.keys(corrMatrix);
+            
+            let html = '<div style="overflow-x: auto;"><table class="table" style="min-width: 600px;">';
+            
+            // Header row
+            html += '<thead><tr><th></th>';
+            columns.forEach(col => {
+                html += `<th style="font-size: 0.75rem; min-width: 80px;">${col}</th>`;
+            });
+            html += '</tr></thead><tbody>';
+            
+            // Data rows
+            columns.forEach(row => {
+                html += `<tr><th style="font-size: 0.75rem;">${row}</th>`;
+                columns.forEach(col => {
+                    const value = corrMatrix[row][col];
+                    const color = getCorrelationColor(value);
+                    html += `
+                        <td class="correlation-cell" style="background-color: ${color};">
+                            ${value.toFixed(2)}
+                        </td>
+                    `;
+                });
+                html += '</tr>';
+            });
+            
+            html += '</tbody></table></div>';
+            container.innerHTML = html;
+        }
+        
+        // Get color for correlation value
+        function getCorrelationColor(value) {
+            const absValue = Math.abs(value);
+            if (absValue > 0.7) return '#fee2e2'; // Strong correlation - red
+            if (absValue > 0.4) return '#fef3c7'; // Medium correlation - yellow
+            return '#d1fae5'; // Weak correlation - green
+        }
+        
+        // Display parameters with statistics
+        function displayParameters(statistics) {
+            const container = document.getElementById('parametersContainer');
+            const columns = Object.keys(statistics);
+            
+            let html = '<div class="grid grid-2 gap-2">';
+            
+            columns.forEach(col => {
+                const stats = statistics[col];
+                html += `
+                    <div class="card" style="background-color: var(--bg-color);">
+                        <div class="flex justify-between items-center mb-2">
+                            <strong style="font-size: 1.125rem;">${col}</strong>
+                            <label style="display: flex; align-items: center; gap: 0.5rem;">
+                                <input 
+                                    type="checkbox" 
+                                    class="column-checkbox" 
+                                    data-column="${col}"
+                                    onchange="toggleColumn('${col}')"
+                                    style="width: 20px; height: 20px;"
+                                >
+                                <span>Include</span>
+                            </label>
+                        </div>
+                        
+                        <div class="stats-grid" style="grid-template-columns: repeat(2, 1fr); gap: 0.5rem; margin-bottom: 1rem;">
+                            <div class="stat-item" style="padding: 0.5rem;">
+                                <div class="stat-item-label">Min</div>
+                                <div class="stat-item-value" style="font-size: 1rem;">${stats.min.toFixed(2)}</div>
+                            </div>
+                            <div class="stat-item" style="padding: 0.5rem;">
+                                <div class="stat-item-label">Max</div>
+                                <div class="stat-item-value" style="font-size: 1rem;">${stats.max.toFixed(2)}</div>
+                            </div>
+                            <div class="stat-item" style="padding: 0.5rem;">
+                                <div class="stat-item-label">Mean</div>
+                                <div class="stat-item-value" style="font-size: 1rem;">${stats.mean.toFixed(2)}</div>
+                            </div>
+                            <div class="stat-item" style="padding: 0.5rem;">
+                                <div class="stat-item-label">Median</div>
+                                <div class="stat-item-value" style="font-size: 1rem;">${stats.median.toFixed(2)}</div>
+                            </div>
+                            <div class="stat-item" style="padding: 0.5rem; grid-column: span 2;">
+                                <div class="stat-item-label">Std Dev</div>
+                                <div class="stat-item-value" style="font-size: 1rem;">${stats.std.toFixed(2)}</div>
+                            </div>
+                        </div>
+                        
+                        <div class="threshold-inputs" id="threshold-${col}" style="display: none;">
+                            <div class="form-group" style="margin-bottom: 0.75rem;">
+                                <label class="form-label">Minimum Threshold</label>
+                                <input 
+                                    type="number" 
+                                    class="form-input"
+                                    step="any"
+                                    placeholder="${stats.min.toFixed(2)}"
+                                    data-column="${col}"
+                                    data-type="min"
+                                    onchange="updateThreshold('${col}', 'min', this.value)"
+                                >
+                            </div>
+                            <div class="form-group" style="margin-bottom: 0;">
+                                <label class="form-label">Maximum Threshold</label>
+                                <input 
+                                    type="number" 
+                                    class="form-input"
+                                    step="any"
+                                    placeholder="${stats.max.toFixed(2)}"
+                                    data-column="${col}"
+                                    data-type="max"
+                                    onchange="updateThreshold('${col}', 'max', this.value)"
+                                >
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+            
+            html += '</div>';
+            container.innerHTML = html;
+        }
+        
+        // Toggle column selection
+        function toggleColumn(column) {
+            const thresholdDiv = document.getElementById(`threshold-${column}`);
+            
+            if (selectedColumns.has(column)) {
+                selectedColumns.delete(column);
+                thresholdDiv.style.display = 'none';
+                delete filterConfig[column];
+            } else {
+                selectedColumns.add(column);
+                thresholdDiv.style.display = 'block';
+                filterConfig[column] = { selected: true };
+            }
+            
+            updateSelectedColumnsList();
+        }
+        
+        // Update threshold values
+        function updateThreshold(column, type, value) {
+            if (!filterConfig[column]) {
+                filterConfig[column] = { selected: true };
+            }
+            
+            if (value !== '') {
+                filterConfig[column][type] = parseFloat(value);
+            } else {
+                delete filterConfig[column][type];
+            }
+        }
+        
+        // Update selected columns list
+        function updateSelectedColumnsList() {
+            const list = Array.from(selectedColumns).join(', ');
+            document.getElementById('selectedColumnsList').textContent = 
+                list || 'None';
+        }
+        
+        // Submit filter form
+        document.getElementById('filterForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            if (selectedColumns.size === 0) {
+                alert('Please select at least one column');
+                return;
+            }
+            
+            const customName = document.getElementById('customName').value;
+            
+            const payload = {
+                source_dataset_id: parseInt(datasetId),
+                custom_name: customName,
+                filter_config: filterConfig,
+                selected_columns: Array.from(selectedColumns)
+            };
+            
+            try {
+                const response = await fetch(`${API_URL}/filter-jobs`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(payload)
+                });
+                
+                if (response.ok) {
+                    const result = await response.json();
+                    alert(`Filter job created successfully! Job ID: ${result.job_id}`);
+                    window.location.href = '/home';
+                } else {
+                    const error = await response.json();
+                    alert(`Error: ${error.detail}`);
+                }
+            } catch (error) {
+                console.error('Error creating filter job:', error);
+                alert('Network error. Please try again.');
+            }
+        });
+        
+        // Initial load
+        loadDatasetStats();
+    </script>
+</body>
+</html>
